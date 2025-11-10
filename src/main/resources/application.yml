@@ -1,0 +1,132 @@
+spring:
+  application:
+    name: fraud-decision-engine
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: decision-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.example.decision.model
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+    listener:
+      ack-mode: manual
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/decision_db
+    username: decision_user
+    password: decision_pass
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 20000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 2
+
+# Application Configuration
+decision:
+  topics:
+    input: txn-events
+    output: decision-results
+  rules:
+    version: v1
+    reload-interval: 60000  # 1 minute
+  cache:
+    ttl: 3600  # 1 hour in seconds
+  velocity:
+    windows:
+      - 1m
+      - 5m
+      - 10m
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.example.decision: DEBUG
+    org.springframework.kafka: WARN
+    org.hibernate.SQL: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Server Configuration
+server:
+  port: 8080
+  shutdown: graceful
+  compression:
+    enabled: true
+  http2:
+    enabled: true
+
+---
+# Docker Profile
+spring:
+  config:
+    activate:
+      on-profile: docker
+  kafka:
+    bootstrap-servers: kafka:9093
+  datasource:
+    url: jdbc:postgresql://postgres:5432/decision_db
+  data:
+    redis:
+      host: redis
+
+---
+# Test Profile
+spring:
+  config:
+    activate:
+      on-profile: test
+  kafka:
+    bootstrap-servers: ${spring.embedded.kafka.brokers}
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
